@@ -1,0 +1,14 @@
+Binaries;**/*.exe,**/*.dll,**/*.dcl
+Batches;**/*.bat
+Symbols;**/*.pdb
+Libs;Lib/**/*.lib
+Source;**/*.h,**/*.hpp,**/*.cpp,**/*.req,**/*.cs
+Maps;**/*.map
+WNetConf;wnetconf.ini
+Admin;Admin/**
+Launchers;**/*.jsenv,**/*.xenv
+BinariesSets;**/*.jswam,**/*.xwam
+TGVs;Tgv/**,EmptyTeam/**
+Images;Bmp/**
+Documentation;Help/**,Examples/**
+Bundles;Bundle/**,Config/**
