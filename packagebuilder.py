@@ -7,6 +7,7 @@ import zipfile
 import shutil
 import time
 import argparse
+import fnmatch
 
 # This script is designed to walk a directory tree to find *.package-definition files and associated *.package-components.
 # These files contain package definitions to be prepared and deployed to a website, in order to make the packages available to 
@@ -16,13 +17,13 @@ import argparse
 # > python packagebuilder.py D:\wyde\ --package-index-policy overwrite --deploy C:\inetpub\wwwroot\eWamUpdate --wipe-destination
 
 class Package:
-    def __init__(self, source_path, product, version, description, package_id):
+    def __init__(self, source_path, name, description, product, version, package_id):
         self.source_path = source_path
         self.type = str.lower(product)
-        self.id = package_id
-        self.name = product + " " + version
-        self.version = version
+        self.name = name
         self.description = description
+        self.id = package_id
+        self.version = version
         self.components = []
 
     def append_component(self, component):
@@ -33,7 +34,7 @@ class Package:
         packageXML.set("Type", self.type)
         packageXML.set("Id", self.id)
         packageXML.set("Name", self.name)
-        packageXML.set("version", self.version)
+        packageXML.set("Version", self.version)
         packageXML.set("Description", self.description)
 
         for component in self.components:
@@ -133,6 +134,8 @@ def parse_package_definition(filename):
                 version = line.split(":")[1].strip("\n\r\b")
             elif (line.startswith("description:")):
                 description = line.split(":")[1].strip("\n\r\b")
+            elif (line.startswith("name:")):
+                name = line.split(":")[1].strip("\n\r\b")
             else:
                 print("Error in " + filename + " line " + str(count) + " : Unknown keyword.")
                 exit(1)
@@ -142,25 +145,46 @@ def parse_package_definition(filename):
         print("Warning in " + filename + " : incomplete package definition.")
 
     source_path = str(pathlib.PurePath(filename).parent)
-    return Package(source_path, product, version, description, package_id)
+    return Package(source_path, name, description, product, version, package_id)
 
-def parse_components_definition(filename, components=None):
+
+def parse_components_definition(filename, package_id, components=None):
     if components == None:
         components = dict()
 
     with open(filename) as pkgcompfile:
+        # parse each line in the components definition file...
         for count, line in enumerate(pkgcompfile):
 
             # Split the fields
             fields = line.split(";")
-            if len(fields) != 2 and len(fields) != 3:
-                print("Warning in " + filename + " line " + str(count) + " : Expected 2 or 3 fields, found " + str(len(fields)))
+            if len(fields) != 3 and len(fields) != 4:
+                print("Warning in " + filename + " line " + str(count) + " : Expected 3 or 4 fields, found " + str(len(fields)))
                 continue
+
+            # parse first field (name)
             name = fields[0].strip("\n\r\b")
-            wildcards_paths = fields[1].strip("\n\r\b").split(",")
-            compression = "lzma" # zip compression by default !
-            if len(fields) == 3:
-                compression = fields[2].strip("\n\r\b")
+
+            # parse second field (wildcard list of packages in which the component can be included in)
+            packageIds = fields[1].strip("\n\r\b").split(",")
+            includeThisComponent = False
+            for packageId in packageIds:
+                # fnmatch says if the string corresponds to the passed wildcard
+                # see https://docs.python.org/3/library/fnmatch.html
+                if fnmatch.fnmatch(package_id, packageId):
+                    includeThisComponent = True
+                    break
+            # if this component doesn't refer to the current package_id, don't include it, continue to the next one.
+            if includeThisComponent == False:
+                continue
+
+            # parse third field (list of files)
+            wildcards_paths = fields[2].strip("\n\r\b").split(",")
+
+            # parse fourth field (compression algorithm)
+            compression = "lzma" # lzma compression by default
+            if len(fields) == 4:
+                compression = fields[3].strip("\n\r\b")
 
             # Find or create the appropriate component
             if not name in components.keys():
@@ -282,7 +306,7 @@ def main():
         components = dict()
         for components_def in components_def_list:
             print("      - " + package.source_path + "\\" + components_def)
-            parse_components_definition(components_def, components)
+            parse_components_definition(components_def, package.id, components)
 
         package.components.extend(components.values())
         packages.append(package)
@@ -307,7 +331,8 @@ def main():
         wideIndex = ET.Element('WideIndex')
 
     for package in packages:
-        wideIndex.append(package.to_element_tree())
+        if len(package.components) != 0:
+            wideIndex.append(package.to_element_tree())
 
     indentXML(wideIndex)
     # ET.dump(wideIndex) 
