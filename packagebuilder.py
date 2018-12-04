@@ -8,6 +8,7 @@ import shutil
 import time
 import argparse
 import fnmatch
+import hashlib
 
 # This script is designed to walk a directory tree to find *.package-definition files and associated *.package-components.
 # These files contain package definitions to be prepared and deployed to a website, in order to make the packages available to 
@@ -112,10 +113,22 @@ class Component:
 class File:
     def __init__(self, path):
         self.path = os.path.normpath(path)
+        self.calculateHash()
+        
+    def calculateHash(self):
+        BLOCKSIZE = 65536
+        hasher = hashlib.md5()
+        with open(self.path, 'rb') as dataFile:
+            buf = dataFile.read(BLOCKSIZE)
+            while len(buf) > 0:
+                hasher.update(buf)
+                buf = dataFile.read(BLOCKSIZE)
+        self.hash = hasher.hexdigest()
 
     def to_element_tree(self):
         fileXML = ET.Element("File")
         fileXML.set("Path", self.path)
+        fileXML.set("Hash", self.hash)
         return fileXML
 
 
@@ -146,7 +159,6 @@ def parse_package_definition(filename):
 
     source_path = str(pathlib.PurePath(filename).parent)
     return Package(source_path, name, description, product, version, package_id)
-
 
 def parse_components_definition(filename, package_id, components=None):
     if components == None:
@@ -211,7 +223,7 @@ def deploy(filenames, destination, move=False):
         print("   copying " + filename + " to " + real_destination + "\\")
 
         if os.path.exists(real_destination + "\\" + filename):
-            print("      Warning: " + real_destination + "\\" + filename + "already exists. Overwriting.")
+            print("      Warning: " + real_destination + "\\" + filename + " already exists. Overwriting.")
             os.remove(real_destination + "\\" + filename)
 
         if move == True:
