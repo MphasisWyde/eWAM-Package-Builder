@@ -17,7 +17,41 @@ import hashlib
 # Example:
 # > python packagebuilder.py D:\wyde\ --package-index-policy overwrite --deploy C:\inetpub\wwwroot\eWamUpdate --wipe-destination
 
+script_version = '2018-12-20'
+
+class PackageIndex:
+    """Represents a package index."""
+
+    def __init__(self, packages = []):
+        self.packages = packages
+
+    def import_from_xml(wideIndexXML):
+        for child in wideIndexXML:
+            if child.tag == "Package":
+                package = Package('', '', '', '', '', '')
+                package.import_from_xml(child)
+                self.packages.append(pacakge)
+
+    def append(self, package):
+        self.packages.append(package)
+        
+    def sort(self):
+        """Sort the list of packages by their name"""
+        self.packages.sort(key=lambda package:package.name)
+        # for package in self.packages:
+        #     package.sort()
+    
+    def to_element_tree(self):
+        """Converts to an XML node."""
+        wideIndexXML = ET.Element('WideIndex')
+        for package in packages:
+            if len(package.components) != 0:
+                wideIndexXML.append(package.to_element_tree())
+        return wideIndexXML
+
 class Package:
+    """Represents a package. A package is composed of components, each containing files."""
+
     def __init__(self, source_path, name, description, product, version, package_id):
         self.source_path = source_path
         self.type = str.lower(product)
@@ -27,10 +61,25 @@ class Package:
         self.version = version
         self.components = []
 
+    def import_from_xml(packageXML):
+        self.source_path = ''
+        self.type = packageXML.attrib['Type']
+        self.name = packageXML.attrib['Name']
+        self.description = packageXML.attrib['Description']
+        self.id = packageXML.attrib['Id']
+        self.version = packageXML.attrib['Version']
+        self.components = []
+        for child in packageXML:
+            if child.tag == "Component":
+                component = Component('', '')
+                component.import_from_xml(child)
+                self.components.append(component)
+
     def append_component(self, component):
         self.components.append(component)
 
     def to_element_tree(self):
+        """Converts to an XML node."""
         packageXML = ET.Element('Package')
         packageXML.set("Type", self.type)
         packageXML.set("Id", self.id)
@@ -45,10 +94,22 @@ class Package:
         return packageXML
 
 class Component:
+    """Component contained in a package. A component can be set to have its files compressed in a zip file, if 'compression' is set to deflate, zip lzma, bzip2, or store. 'store' means the files are stored in the zip file without compression. If compression is empty string, component files will be stored raw, not in an archive. The archive container format is always '.zip'. Compression specifies the compression algorithm used."""
+
     def __init__(self, name, compression="7z"):
         self.name = name
         self.compression = compression
         self.files = []
+
+    def import_from_xml(componentXML):
+        self.name = componentXML.attrib['Name']
+        self.compression = componentXML.attrib['Compression']
+        self.files = []
+        for child in componentXML:
+            if child.tag == "File":
+                componentfile = File('')
+                componentfile.import_from_xml(child)
+                self.files.append(componentfile)
 
     def append_file(self, componentFile):
         """Append given 'File' object."""
@@ -100,6 +161,7 @@ class Component:
                 zip_file.write(file.path)
 
     def to_element_tree(self):
+        """Converts to an XML node."""
         componentXML = ET.Element("Component")
         componentXML.set("Name", self.name)
         componentXML.set("Compression", self.compression)
@@ -113,8 +175,13 @@ class Component:
 class File:
     def __init__(self, path):
         self.path = os.path.normpath(path)
+        self.hash = ''
         self.calculateHash()
         
+    def import_from_xml(fileXML):
+        self.path = fileXML.attrib['Path']
+        self.hash = fileXML.attrib['Hash']
+
     def calculateHash(self):
         BLOCKSIZE = 65536
         hasher = hashlib.md5()
@@ -126,6 +193,7 @@ class File:
         self.hash = hasher.hexdigest()
 
     def to_element_tree(self):
+        """Converts to an XML node."""
         fileXML = ET.Element("File")
         fileXML.set("Path", self.path)
         fileXML.set("Hash", self.hash)
@@ -133,10 +201,12 @@ class File:
 
 
 def parse_package_definition(filename):
+    """Parse the content of a file '[...].package-definition' and return the corresponding Package object."""
     package_id = ""
     product = ""
     version = ""
     description = ""
+    # For each line in the file, get the information provided
     with open(filename) as pkginfofile:
         for count, line in enumerate(pkginfofile):
             if (line.startswith("unique-id:")):
@@ -161,6 +231,7 @@ def parse_package_definition(filename):
     return Package(source_path, name, description, product, version, package_id)
 
 def parse_components_definition(filename, package_id, components=None):
+    """Parse the content of a file '[...].package-components' and append files and to the passed 'components' dictionary. The dictionary will be created if empty."""
     if components == None:
         components = dict()
 
@@ -210,6 +281,7 @@ def parse_components_definition(filename, package_id, components=None):
     pkgcompfile.close()
 
 def deploy(filenames, destination, move=False):
+    """Deploy files provided in the list of 'filenames' to the provided 'destination' folder. filenames may contain a leading folder, which will be created as sub tree of the destination. Move the file instead of copying if 'move' is True. Creates the path if it doesn't exist. Overwrites destination if exists."""
     for filename in filenames:
         real_destination = destination
 
@@ -232,6 +304,7 @@ def deploy(filenames, destination, move=False):
             shutil.copy2(filename, real_destination + "\\")
 
 def remove_and_clean_existing_packages(wideIndex, packages, destination):
+    """Remove pre-existing packages from the provided package-index XML object and from the provided 'destination' : remove the packages that have the same Id as any of the provided 'packages'."""
     for package in packages:
         for oldPackage in wideIndex.findall("./Package[@Id='" + package.id + "']"):
             print("Package " + package.id + " already exists. Updating index with newly built package.")
@@ -265,24 +338,16 @@ def main():
     parser.add_argument('--package-index', help='package index file', default='package-index.xml')
     parser.add_argument('--package-index-policy', choices=['overwrite', 'append', 'update'], help='Decide what to do if package-index already exists: overwrite=overwrite existing, append=append to existing, update=update existing', required=True)
     parser.add_argument('--deploy', help='If provided, should specify where packages files should be deployed. No deployment is done if this argument is not provided.')
-    parser.add_argument('--wipe-destination', action='store_true', help='Wipe destination before deploying.')
-    parser.add_argument('--version', action='version', version='2018-11-03')
+    parser.add_argument('--deploy-policy', choices=['wipe', 'update'], help='Decide what to do with existing deployed files: wipe=wipe existing in destination folder, update=update existing files in destination folder', required=True)
+    parser.add_argument('--version', action='version', version=script_version)
 
     args = parser.parse_args()
 
     script_name = sys.argv[0] 
     input_path = args.root_path
-    package_index = args.package_index
+    package_index_file = args.package_index
     destination = args.deploy
-    wipe_destination = args.wipe_destination
-
-    if destination != None and wipe_destination and os.path.exists(destination):
-        print("Wiping destination folder in 10 seconds...")
-        time.sleep(10)
-        shutil.rmtree(destination, ignore_errors=False)
-
-    if os.path.exists(package_index) and args.package_index_policy == 'overwrite':
-        os.remove(package_index)
+    deploy_policy = args.deploy_policy
 
     start_dir = os.getcwd()
 
@@ -331,28 +396,67 @@ def main():
                 componentsToRemove.append(component)
         for component in componentsToRemove:
             package.components.remove(component)
-        
+
+    new_package_index = PackageIndex(packages)
+    old_package_index = None
+
+    # # Prepare package-index and destination
+    # os.chdir(start_dir)
+    # wideIndex = None
+    # if (pathlib.Path(package_index_file).exists()) and args.package_index_policy == "update":
+    #     xmlTree = ET.parse(package_index_file)
+    #     wideIndex = xmlTree.getroot()
+    #     remove_and_clean_existing_packages(wideIndex, packages, destination)
+    # else:
+    #     wideIndex = ET.Element('WideIndex')
+
+
+    # Create or update package-index.xml, and deploy
     os.chdir(start_dir)
-    wideIndex = None
-    if (pathlib.Path(package_index).exists()):
-        xmlTree = ET.parse(package_index)
-        wideIndex = xmlTree.getroot()
-        if args.package_index_policy == "update":
-            remove_and_clean_existing_packages(wideIndex, packages, destination)
-    else:
-        wideIndex = ET.Element('WideIndex')
+    if args.package_index_policy == 'overwrite':
+        if os.path.exists(destination + "\\" + package_index_file):
+            os.remove(destination + "\\" + package_index_file)
+        new_package_index.sort()
+        wideIndexXML = new_package_index.to_element_tree()
+        indentXML(wideIndexXML)
+        # ET.dump(wideIndex) 
+        wideTree = ET.ElementTree(wideIndexXML)
+        wideTree.write(package_index_file)
 
-    for package in packages:
-        if len(package.components) != 0:
-            wideIndex.append(package.to_element_tree())
+    elif args.package_index_policy == 'append':
+        xmlTree = ET.parse(destination + "\\" + package_index_file)
+        wideIndexXML = xmlTree.getroot()
+        old_package_index = PackageIndex()
+        old_package_index.import_from_xml(wideIndexXML)
+        for package in old_package_index.packages:
+            new_package_index.append(package)
+        new_package_index.sort()
 
-    indentXML(wideIndex)
-    # ET.dump(wideIndex) 
-    wideTree = ET.ElementTree(wideIndex)
-    wideTree.write(package_index)
+    elif args.package_index_policy == 'update':
+        xmlTree = ET.parse(destination + "\\" + package_index_file)
+        wideIndexXML = xmlTree.getroot()
+        old_package_index = PackageIndex()
+        old_package_index.import_from_xml(wideIndexXML)
+        for package in old_package_index.packages:
+            # TODO : do somthing smart here (see remove_and_clean_existing_packages ?)
+            # new_package_index.append(package)
+        new_package_index.sort()
 
-    # Zip everything and copy to target destination
+    # Deploy newly created package-index
     if destination != None and destination != "":
+        print("Deploying " + package_index_file + "...")
+        deploy([ package_index_file ], destination, move=True)
+
+    # CAREFUL : PROBABLY ALREADY HAVE PACKAGE-INDEX DEPLOYED ... WE DON'T WANT TO DO THAT
+    # Preparing deployment 
+    if destination != None and wipe_destination and os.path.exists(destination):
+        print("Wiping destination folder...")
+        shutil.rmtree(destination, ignore_errors=False)
+
+    # If deployement required
+    if destination == None or destination == "":
+
+        # Zip everything and copy to target destination
         for package in packages:
             print("Deploying package " + package.id)
             os.chdir(input_path + "\\" + package.source_path)
