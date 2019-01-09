@@ -7,7 +7,7 @@ This script is meant to be used to generate package-index.xml and deploy the cor
 ### How it works
 This tools allows you to builf packages (e.g. wynsure 5.8.0.65, ewam 6.1.5.33, ewam 6.0.0.19). A package is composed of components (Binaries, Dlls, CppDlls, Documentation, etc.). A component is composed ot files. A component may be compressed (i.e. all its files are put in an archive .zip file), or not compressed (all its files are deployed "as is").
 
-The script looks for package definition files (*.package-definition files) in all the provided root pathes. Then it looks for the component definitions for each package (*.package-components files under the same folder as its corresponding .package-definition file). You can see some [samples](Samples).
+The script looks for package definition files (\*.package-definition files) in all the provided root pathes. Then it looks for the component definitions for each package (\*.package-components files under the same folder as its corresponding .package-definition file). You can see some [samples](Samples).
 
 ### .package-definition format
 It must contain these sections :
