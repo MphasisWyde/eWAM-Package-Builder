@@ -9,6 +9,7 @@ import time
 import argparse
 import fnmatch
 import hashlib
+import time
 
 # This script is designed to walk a directory tree to find *.package-definition files and associated *.package-components.
 # These files contain package definitions to be prepared and deployed to a website, in order to make the packages available to 
@@ -26,6 +27,7 @@ class PackageIndex:
         self.packages = packages
 
     def import_from_xml(self, wideIndexXML):
+        """Re-import PackageIndex from XML"""
         for child in wideIndexXML:
             if child.tag == "Package":
                 package = Package('', '', '', '', '', '')
@@ -33,12 +35,15 @@ class PackageIndex:
                 self.packages.append(package)
 
     def __getitem__(self, item):
+        """Implementation of operator [] with a Package object as parmeter: returns the Package with same id, if exists."""
         return next((x for x in self.packages if item.id == x.id), None)
 
     def __contains__(self, item):
+        """Implementation of operator 'in' : "if package in packageIndex..." : returns true if the Package with same id is found in the PackageIndex."""
         return any((x for x in self.packages if item.id == x.id))
 
     def append(self, package):
+        """Append a package to PackageIndex"""
         self.packages.append(package)
         
     def sort(self):
@@ -69,6 +74,7 @@ class Package:
         self.state = 'added'
 
     def import_from_xml(self, packageXML):
+        """Re-import Package from XML"""
         self.source_path = ''
         self.type = packageXML.attrib['Type']
         self.name = packageXML.attrib['Name']
@@ -84,9 +90,11 @@ class Package:
                 self.components.append(component)
 
     def __getitem__(self, item):
+        """Implementation of operator [] with a Component object as parmeter: returns the Component with same name, if exists."""
         return next((x for x in self.components if item.name == x.name), None)
 
     def __contains__(self, item):
+        """Implementation of operator 'in' : "if component in package..." : returns true if the Component with same name is found in the Package."""
         return any((x for x in self.components if item.name == x.name))
 
     def sort(self):
@@ -96,6 +104,7 @@ class Package:
             component.sort()
 
     def append(self, component):
+        """Append a Component to Package"""
         self.components.append(component)
 
     def to_element_tree(self):
@@ -107,7 +116,7 @@ class Package:
         packageXML.set("Name", self.name)
         packageXML.set("Version", self.version)
         packageXML.set("Description", self.description)
-        packageXML.set("State", self.state)
+        # packageXML.set("State", self.state)
 
         for component in self.components:
             if len(component.files) != 0 and component.state != 'removed':
@@ -125,6 +134,7 @@ class Component:
         self.state = 'added'
 
     def import_from_xml(self, componentXML):
+        """Re-import Component from XML"""
         self.name = componentXML.attrib['Name']
         self.compression = componentXML.attrib['Compression']
         self.files = []
@@ -136,9 +146,11 @@ class Component:
                 self.files.append(componentfile)
 
     def __getitem__(self, item):
+        """Implementation of operator [] with a File object as parmeter: returns the File with same path, if exists."""
         return next((x for x in self.files if item.path == x.path), None)
 
     def __contains__(self, item):
+        """Implementation of operator 'in' : "if file in component..." : returns true if the File with same path is found in the Component."""
         return any((x for x in self.files if item.path == x.path))
 
     def sort(self):
@@ -177,7 +189,7 @@ class Component:
                 self.append_filepath(found_file)
 
     def create_zip(self, archive_filename):
-
+        """Create a zip file from Component 'files' list"""
         archive_format = None
         if self.compression == "deflate" or self.compression == "zip":
             archive_format = zipfile.ZIP_DEFLATED
@@ -203,7 +215,7 @@ class Component:
         componentXML = ET.Element("Component")
         componentXML.set("Name", self.name)
         componentXML.set("Compression", self.compression)
-        componentXML.set("State", self.state)
+        # componentXML.set("State", self.state)
 
         for componentFile in self.files:
             if componentFile.state != 'removed':
@@ -219,11 +231,13 @@ class File:
         self.state = 'added'
         
     def import_from_xml(self, fileXML):
+        """Re-import File from XML"""
         self.path = fileXML.attrib['Path']
         self.hash = fileXML.attrib['Hash']
         self.state = 'unchanged'
 
     def calculateHash(self):
+        """Calculate MD5 hash if the file"""
         if not os.path.isfile(self.path):
             self.hash = ""
             return
@@ -242,7 +256,7 @@ class File:
         fileXML = ET.Element("File")
         fileXML.set("Path", self.path)
         fileXML.set("Hash", self.hash)
-        fileXML.set("State", self.state)
+        # fileXML.set("State", self.state)
         return fileXML
 
 
@@ -341,41 +355,25 @@ def deploy(filenames, destination, move=False):
         print("   copying " + filename + " to " + real_destination)
 
         if os.path.isfile(real_destination + '\\' + os.path.basename(filename)):
-            print("      Warning: " + real_destination + " already exists. Overwriting.")
+            print("      Warning: " + real_destination + '\\' + os.path.basename(filename) + " already exists. Overwriting.")
             os.remove(real_destination + '\\' + os.path.basename(filename))
 
-        if move == True:
-            shutil.move(filename, real_destination)
-        else:
-            shutil.copy2(filename, real_destination)
-
-# def remove_and_clean_existing_packages(wideIndex, packages, destination):
-#     """Remove pre-existing packages from the provided package-index XML object and from the provided 'destination' : remove the packages that have the same Id as any of the provided 'packages'."""
-#     for package in packages:
-#         for oldPackage in wideIndex.findall("./Package[@Id='" + package.id + "']"):
-#             print("Package " + package.id + " already exists. Updating index with newly built package.")
-#             wideIndex.remove(oldPackage)
-#             if destination != None and destination != "" and os.path.exists(destination + "\\" + package.id):
-#                 shutil.rmtree(destination + "\\" + package.id)
-
-def indentXML(elem, level=0):
-    i = "\n" + level*"  "
-    if len(elem):
-        if not elem.text or not elem.text.strip():
-            elem.text = i + "  "
-        if not elem.tail or not elem.tail.strip():
-            elem.tail = i
-        for elem in elem:
-            indentXML(elem, level+1)
-        if not elem.tail or not elem.tail.strip():
-            elem.tail = i
-    else:
-        if level and (not elem.tail or not elem.tail.strip()):
-            elem.tail = i
-
+        deploy_success = False
+        while not deploy_success:
+            try:
+                if move == True:
+                    shutil.move(filename, real_destination)
+                    deploy_success = True
+                else:
+                    shutil.copy2(filename, real_destination)
+                    deploy_success = True
+            except:
+                print("   Deploy failed... retrying in 10 seconds")
+                time.sleep(10)
+                pass
 
 def build_pacakge_list(root_dir):
-
+    """Traverses root_dir in search for *.package-definition files, parses them and there corresponding *.package-components files, to build a package list."""
     # Backup cwd
     previous_cwd = os.getcwd()
 
@@ -430,15 +428,18 @@ def build_pacakge_list(root_dir):
     return packages
 
 def make_package_index(packages, package_index_file, old_package_index_file, package_index_policy):
-    
+    """Build new PackageIndex object based on new package list and old package list and package index policy (should we update the new index based on old index?)"""
     new_package_index = PackageIndex(packages)
     old_package_index = None
     
-    # Create or update package-index.xml, and deploy
+    # Create or update package-index.xml
+
+    # if policy is to overwrite : simply overwrite any existing package-index.xml file
     if package_index_policy == 'overwrite':
         if os.path.isfile(package_index_file):
             os.remove(package_index_file)
 
+    # if policy is to append, just append new content found to old existing package-index.xml file
     elif package_index_policy == 'append' and os.path.isfile(old_package_index_file):
         xmlTree = ET.parse(old_package_index_file)
         wideIndexXML = xmlTree.getroot()
@@ -448,13 +449,14 @@ def make_package_index(packages, package_index_file, old_package_index_file, pac
             old_package_index.append(package)
         new_package_index = old_package_index
 
+    # if policy is to update, compare newly created index with old index, and set up accordingly the "state" attribute of each package/component/file. This will be used in deployment phase (deploy_packages).
     elif package_index_policy == 'update' and os.path.isfile(old_package_index_file):
         xmlTree = ET.parse(old_package_index_file)
         wideIndexXML = xmlTree.getroot()
         old_package_index = PackageIndex()
         old_package_index.import_from_xml(wideIndexXML)
         
-        # look for modified files/components/packages
+        # look for modified/added packages/components/files
         for package in new_package_index.packages:
             if package in old_package_index:
                 package.state = 'unchanged'
@@ -494,7 +496,7 @@ def make_package_index(packages, package_index_file, old_package_index_file, pac
                         component.state = 'modified'
                         package.state = 'modified'
 
-        # look for removed files/components/packages
+        # look for removed packages/components/files
         for package in old_package_index.packages:
             if not package in new_package_index:
                 package.state = 'removed'
@@ -526,8 +528,24 @@ def make_package_index(packages, package_index_file, old_package_index_file, pac
 
     return new_package_index
 
-def deploy_packages(package_index_file, new_package_index, destination, deploy_policy):
+def indentXML(elem, level=0):
+    """Indent XML when generating it"""
+    i = "\n" + level*"  "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "  "
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for elem in elem:
+            indentXML(elem, level+1)
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
 
+def deploy_packages(package_index_file, new_package_index, destination, deploy_policy):
+    """Deploy files from package index. Use 'state' attribute to know if the package/component/file has been modified, added, removed or is unchanged, thus deciding what to do about it, depending on the deploy_policy"""
     print("Deploying...")
 
     # backup cwd
@@ -537,26 +555,30 @@ def deploy_packages(package_index_file, new_package_index, destination, deploy_p
         print("Wiping destination folder " + destination + "...")
         shutil.rmtree(destination, ignore_errors=False)
 
-    # Zip everything and copy to target destination
+    # Zip everything (if needed) and copy to target destination
     for package in new_package_index.packages:
-
+        
+        # if the package is marked as unchanged, just skip it
         if deploy_policy == 'update' and package.state == "unchanged":
             print("unchanged package '" + package.id)
             continue
-
+        
+        # if package is marked as removed, delete its destination
         if deploy_policy == 'update' and package.state == "removed":
             print("removed package '" + package.id)
             shutil.rmtree(destination + "\\" + package.id, ignore_errors=False)
             continue
 
+        # for each component of the package
         print("deploying package " + package.id)
         os.chdir(package.source_path)
         for component in package.components:
 
+            # if component is marked as unchanged, skip it
             if deploy_policy == 'update' and component.state == "unchanged":
                 continue
 
-            # If component compression has changed, just remove any existing file, the component will be re-generated
+            # If component compression has changed, just remove any existing file, the component will be re-generated (zip or raw files of the component)
             if deploy_policy == 'update' and component.state == "modifiedcompression":
                 
                 print("   changed compression of '" + component.name + "' to " + component.compression)
@@ -569,11 +591,12 @@ def deploy_packages(package_index_file, new_package_index, destination, deploy_p
                     if os.path.isfile(destination + "\\" + package.id + '\\' + file.path):
                         os.remove(destination + "\\" + package.id + '\\' + file.path)
 
-
+            # if the component is marked for compression, put all its files in a zip file named after the component
             if component.compression != None and component.compression != "None" and component.compression != "":
 
                 zip_filename = component.name + ".zip"
-
+                
+                # if the component has been marked as removed, remove its corresponding archive if it exists
                 if deploy_policy == 'update' and component.state == "removed":
                     if os.path.isfile(destination + "\\" + package.id + '\\' + zip_filename):
                         print("   component '" + component.name + "' : removed")
@@ -584,7 +607,11 @@ def deploy_packages(package_index_file, new_package_index, destination, deploy_p
                 print("   Compressing " + component.name + " to .zip archive, using method '" + component.compression + "'...")
                 component.create_zip(tmp_dir + "\\" + zip_filename)
                 deploy([ tmp_dir + "\\" + zip_filename ], destination + "\\" + package.id, move=True)
+
+            # if the component is not marked for compression, simply deploy the files of the component
             else:
+
+                # if the component is marked as removed, delete each of his existing already deployed files
                 if deploy_policy == 'update' and component.state == "removed":
                     print("   component '" + component.name + "' : removed, removing files:")
                     for file in component.files:
@@ -593,12 +620,17 @@ def deploy_packages(package_index_file, new_package_index, destination, deploy_p
                             os.remove(destination + "\\" + package.id + '\\' + file.path)
                     continue
 
+                # for each file of the component...
                 filenames_to_deploy = []
                 for file in component.files:
+
+                    # if the file is marked as removed, remove its pre-existing instance
                     if deploy_policy == 'update' and file.state == "removed":
                         if os.path.isfile(destination + "\\" + package.id + '\\' + file.path):
                             print("      file '" + file.path + "' : removed")
                             os.remove(destination + "\\" + package.id + '\\' + file.path)
+                            
+                    # otherwise just add the file to the list of files to deploy
                     else:
                         filenames_to_deploy.append(file.path)
                 
