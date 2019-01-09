@@ -1,14 +1,18 @@
-Binaries;**/*.exe,**/*.dll,**/*.dcl
-Batches;**/*.bat
-Symbols;**/*.pdb
-Libs;Lib/**/*.lib
-Source;**/*.h,**/*.hpp,**/*.cpp,**/*.req,**/*.cs
-Maps;**/*.map
-WNetConf;wnetconf.ini
-Admin;Admin/**
-Launchers;**/*.jsenv,**/*.xenv
-BinariesSets;**/*.jswam,**/*.xwam
-TGVs;Tgv/**,EmptyTeam/**
-Images;Bmp/**
-Documentation;Help/**,Examples/**
-Bundles;Bundle/**,Config/**
+Core Binaries;*;Bin/**/*.exe,Bin/**/*.dll,Dll/**/*.dll,Dll/**/*.exe
+Core Symbols;*;Bin/**/*.pdb,Dll/**/*.pdb
+CppDll;*;CppDll/*.exe,CppDll/*.dll,CppDll/*.dcl
+CppDll Symbols;*;CppDll/**/*.pdb
+Debug Binaries;*;CppDll.Debug/**,Dll.debug/**
+Batches;*;**/*.bat
+Libs;*;Lib/**/*.lib
+Source;*;**/*.h,**/*.hpp,**/*.cpp,**/*.req,**/*.cs
+Maps;*;**/*.map
+WNetConf;*;wnetconf.ini
+WydeWeb;*;WydeServer/**
+Admin;*;Admin/**
+Launchers;*;**/*.jsenv,**/*.xenv
+Binaries Sets;*;**/*.jswam,**/*.xwam
+TGVs;*;Tgv/**,EmptyTeam/**
+Images;*;Bmp/**
+Documentation;*;Documentation/**,Help/**,Examples/**
+Bundles;*;Bundle/**,Config/**
