@@ -20,6 +20,24 @@ import time
 
 script_version = '2019-01-01'
 
+parser = argparse.ArgumentParser(description="Index and deploy products referenced by *.package-definition and *.package-components")
+parser.add_argument('root_pathes', metavar='PATH', nargs='+', help='root path for indexing')
+parser.add_argument('--package-index', help='package index file', default='package-index.xml')
+parser.add_argument('--package-index-policy', choices=['overwrite', 'append', 'update', 'update-keep-old-packages'], help='Decide what to do if package-index already exists: overwrite=overwrite existing, append=append to existing, update=update existing package-index including removing package, components and files that ate not found anymore, update-keep-old-packages=update but keep old packages that where not found anymore, only update packages', required=True)
+parser.add_argument('--deploy', help='If provided, should specify where packages files should be deployed. No deployment is done if this argument is not provided.')
+parser.add_argument('--deploy-policy', choices=['wipe', 'update'], help='Decide what to do with existing deployed files: wipe=wipe existing in destination folder, update=update existing files in destination folder includeing remove files, pacakges, components that dont exist anymore. Use update-keep-old-packages for package-index-policy in order to prevent deletion of old packages that you removed from source.')
+parser.add_argument('--version', action='version', version=script_version)
+
+args = parser.parse_args()
+
+script_name = sys.argv[0] 
+root_pathes = args.root_pathes
+package_index_file = args.package_index
+package_index_policy = args.package_index_policy
+destination = os.path.abspath(args.deploy)
+deploy_policy = args.deploy_policy
+
+
 class PackageIndex:
     """Represents a package index."""
 
@@ -56,7 +74,7 @@ class PackageIndex:
         """Converts to an XML node."""
         wideIndexXML = ET.Element('WideIndex')
         for package in self.packages:
-            if len(package.components) != 0 and package.state != "removed":
+            if len(package.components) != 0 and (package.state != "removed" or package_index_policy == "update-keep-old-packages"):
                 wideIndexXML.append(package.to_element_tree())
         return wideIndexXML
 
@@ -450,7 +468,7 @@ def make_package_index(packages, package_index_file, old_package_index_file, pac
         new_package_index = old_package_index
 
     # if policy is to update, compare newly created index with old index, and set up accordingly the "state" attribute of each package/component/file. This will be used in deployment phase (deploy_packages).
-    elif package_index_policy == 'update' and os.path.isfile(old_package_index_file):
+    elif package_index_policy == 'update' or package_index_policy == 'update-keep-old-packages' and os.path.isfile(old_package_index_file):
         xmlTree = ET.parse(old_package_index_file)
         wideIndexXML = xmlTree.getroot()
         old_package_index = PackageIndex()
@@ -499,7 +517,10 @@ def make_package_index(packages, package_index_file, old_package_index_file, pac
         # look for removed packages/components/files
         for package in old_package_index.packages:
             if not package in new_package_index:
-                package.state = 'removed'
+                if package_index_policy != 'update-keep-old-packages':
+                    package.state = 'removed'
+                else:
+                    package.state = 'unchanged'
                 new_package_index.append(package)
                 continue
 
@@ -644,30 +665,13 @@ def deploy_packages(package_index_file, new_package_index, destination, deploy_p
     deploy([ package_index_file ], destination, move=False)
 
 def main():
-    parser = argparse.ArgumentParser(description="Index and deploy products referenced by *.package-definition and *.package-components")
-    parser.add_argument('root_pathes', metavar='PATH', nargs='+', help='root path for indexing')
-    parser.add_argument('--package-index', help='package index file', default='package-index.xml')
-    parser.add_argument('--package-index-policy', choices=['overwrite', 'append', 'update'], help='Decide what to do if package-index already exists: overwrite=overwrite existing, append=append to existing, update=update existing', required=True)
-    parser.add_argument('--deploy', help='If provided, should specify where packages files should be deployed. No deployment is done if this argument is not provided.')
-    parser.add_argument('--deploy-policy', choices=['wipe', 'update'], help='Decide what to do with existing deployed files: wipe=wipe existing in destination folder, update=update existing files in destination folder')
-    parser.add_argument('--version', action='version', version=script_version)
-
-    args = parser.parse_args()
-
-    script_name = sys.argv[0] 
-    root_pathes = args.root_pathes
-    package_index_file = args.package_index
-    package_index_policy = args.package_index_policy
-    destination = os.path.abspath(args.deploy)
-    deploy_policy = args.deploy_policy
-
     # Gather packages/components/files list from **/.package-definition and **/.package-components files
     packages = []
     for root_path in root_pathes:
         root_path = os.path.abspath(root_path)
         packages.extend(build_pacakge_list(root_path))
 
-    #Build new package index, and generate .package-index file
+    #Build new package index, and generate package-index XML file
     old_package_index_file = package_index_file
     if destination != None and destination != "":
         old_package_index_file = destination + "\\" + package_index_file
