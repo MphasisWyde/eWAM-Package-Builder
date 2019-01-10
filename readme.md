@@ -56,9 +56,9 @@ When deploying the files to IIS folder, you might want to use the [web.config](D
 ## Command line
 
 ```
-packagebuilder.py --help
 usage: packagebuilder.py [-h] [--package-index PACKAGE_INDEX]
-                         --package-index-policy {overwrite,append,update}
+                         --package-index-policy
+                         {overwrite,append,update,update-keep-old-packages}
                          [--deploy DEPLOY] [--deploy-policy {wipe,update}]
                          [--version]
                          PATH [PATH ...]
@@ -73,10 +73,14 @@ optional arguments:
   -h, --help            show this help message and exit
   --package-index PACKAGE_INDEX
                         package index file
-  --package-index-policy {overwrite,append,update}
+  --package-index-policy {overwrite,append,update,update-keep-old-packages}
                         Decide what to do if package-index already exists:
                         overwrite=overwrite existing, append=append to
-                        existing, update=update existing
+                        existing, update=update existing package-index
+                        including removing package, components and files that
+                        ate not found anymore, update-keep-old-packages=update
+                        but keep old packages that where not found anymore,
+                        only update packages
   --deploy DEPLOY       If provided, should specify where packages files
                         should be deployed. No deployment is done if this
                         argument is not provided.
@@ -84,6 +88,10 @@ optional arguments:
                         Decide what to do with existing deployed files:
                         wipe=wipe existing in destination folder,
                         update=update existing files in destination folder
+                        includeing remove files, pacakges, components that
+                        dont exist anymore. Use update-keep-old-packages for
+                        package-index-policy in order to prevent deletion of
+                        old packages that you removed from source.
   --version             show program's version number and exit
 ```
 
