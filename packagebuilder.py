@@ -18,7 +18,7 @@ import time
 # Example:
 # > python packagebuilder.py D:\wyde\ --package-index-policy overwrite --deploy C:\inetpub\wwwroot\eWamUpdate --wipe-destination
 
-script_version = '2019-01-01'
+script_version = '2019-01-10'
 
 parser = argparse.ArgumentParser(description="Index and deploy products referenced by *.package-definition and *.package-components")
 parser.add_argument('root_pathes', metavar='PATH', nargs='+', help='root path for indexing')
